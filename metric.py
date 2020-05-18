@@ -23,6 +23,7 @@ def accuracy_f1_confusion_matrix(logits, y):
     predicted = predict(logits)
     equality = torch.BoolTensor(predicted == y)
     positivity = torch.BoolTensor(y == torch.ones(len(y)))
+
     tp = torch.sum(equality & positivity).float()
     fp = torch.sum(~equality & ~positivity).float()
     tn = torch.sum(equality & ~positivity).float()

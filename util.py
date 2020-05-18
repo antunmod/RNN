@@ -111,7 +111,7 @@ def frequencies(instances):
     text_frequencies = dict()
     label_frequencies = dict()
 
-    # add padding and unknown tokens if necessary
+    # add padding and unknown tokens
     text_frequencies["<PAD>"] = 100001
     text_frequencies["<UNK>"] = 100000
 
@@ -128,6 +128,7 @@ def frequencies(instances):
 
     text_frequencies = {k: v for k, v in reversed(sorted(text_frequencies.items(), key=lambda item: item[1]))}
     label_frequencies = {k: v for k, v in reversed(sorted(label_frequencies.items(), key=lambda item: item[1]))}
+
     return text_frequencies, label_frequencies
 
 
@@ -176,19 +177,6 @@ def initialize_dataset_and_dataloader(file_path, batch_size):
 def initialize_dataloader(file_path, batch_size):
     dataset, dataloader = initialize_dataset_and_dataloader(file_path, batch_size)
     return dataloader
-
-
-def metrics():
-    tp = np.sum(np.logical_and(Y == Y_, Y_ == True))
-    fn = np.sum(np.logical_and(Y != Y_, Y_ == True))
-    tn = np.sum(np.logical_and(Y == Y_, Y_ == False))
-    fp = np.sum(np.logical_and(Y != Y_, Y_ == False))
-
-    recall = tp / (tp + fn)
-    precision = tp / (tp + fp)
-    accuracy = (tp + tn) / (tp + fn + tn + fp)
-
-    return accuracy, recall, precision
 
 
 config = {}
