@@ -86,6 +86,8 @@ class Vocab:
         indexes = []
 
         for token in tokens:
+            if token not in self.stoi:
+                print(f'{token} not in vocab')
             indexes.append(self.stoi[token])
 
         return torch.tensor(indexes)
@@ -111,7 +113,7 @@ def frequencies(instances):
     text_frequencies = dict()
     label_frequencies = dict()
 
-    # add padding and unknown tokens
+    # add padding and unknown tokens if necessary
     text_frequencies["<PAD>"] = 100001
     text_frequencies["<UNK>"] = 100000
 
@@ -167,10 +169,10 @@ def initialize_dataset(file_path):
     return nlp_dataset.from_file(file_path=file_path)
 
 
-def initialize_dataset_and_dataloader(file_path, batch_size):
+def initialize_dataset_and_dataloader(file_path, batch_size, shuffle=False):
     dataset = initialize_dataset(file_path)
     dataloader = DataLoader(dataset=dataset, batch_size=batch_size,
-                            shuffle=config["shuffle"], collate_fn=pad_collate_fn)
+                            shuffle=shuffle, collate_fn=pad_collate_fn)
     return dataset, dataloader
 
 

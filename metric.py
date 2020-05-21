@@ -15,7 +15,7 @@ def binary_to_one_hot(binary_logits):
 
 def predict(binary_logits):
     """ This method predicts value according to the given logits"""
-    return torch.Tensor([int(binary_logit > 0) for binary_logit in binary_logits])
+    return torch.Tensor([int(binary_logit >= 0) for binary_logit in binary_logits])
 
 
 def accuracy_f1_confusion_matrix(logits, y):

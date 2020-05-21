@@ -1,26 +1,27 @@
 import torch
 from torch import nn
-import util
-import argparse
 import metric
+import util
+import baseline
+import argparse
 
 
-class BaselineModel(nn.Module):
+class RecurrentModel(nn.Module):
 
-    def __init__(self, fc1_width, fc2_width, fc3_width, output_width):
-        super(BaselineModel, self).__init__()
+    def __init__(self, input_width, rnn1_width, rnn2_width, fc1_width, fc2_width, output_width):
+        super().__init__()
+        self.rnn1 = nn.RNN(input_width, rnn1_width, 2)
+        self.rnn2 = nn.RNN(rnn1_width, rnn2_width, 2)
         self.fc1 = nn.Linear(fc1_width, fc2_width, bias=True)
-        self.fc2 = nn.Linear(fc2_width, fc3_width, bias=True)
-        self.fc3 = nn.Linear(fc3_width, output_width, bias=True)
+        self.fc2 = nn.Linear(fc2_width, output_width, bias=True)
 
     def forward(self, x):
-        h = torch.mean(x, 1)
-        h = self.fc1(h)
+        x = x.permute(1, 0, 2)
+        out1, h1 = self.rnn1(x)
+        out2, h2 = self.rnn2(out1, h1)
+        h = self.fc1(out2)
         h = torch.relu(h)
-
-        h = self.fc2(h)
-        h = torch.relu(h)
-        return self.fc3(h)
+        return self.fc2(h)[-1]  # consider only the final output
 
 
 def train(model, data, optimizer, criterion, args):
@@ -44,8 +45,7 @@ def evaluate(model, data, criterion):
     model.eval()
     all_logits = torch.FloatTensor()
     all_y = torch.FloatTensor()
-    average_batch_loss = 0
-
+    total_epoch_loss = 0
     with torch.no_grad():
         for batch_num, batch in enumerate(data):
             x, y, lengths = batch
@@ -59,24 +59,13 @@ def evaluate(model, data, criterion):
             # saving logits for metrics calculations
             all_logits = torch.cat((all_logits, logits))
             all_y = torch.cat((all_y, torch.FloatTensor(y)))
-            average_batch_loss += loss.data
+            total_epoch_loss += loss.data
 
     accuracy, f1, confusion_matrix = metric.accuracy_f1_confusion_matrix(all_logits, all_y)
-    print(f'Average validate batch loss: {average_batch_loss / (batch_num + 1)}')
+    print(f'Average validate batch loss: {total_epoch_loss / (batch_num + 1)}')
     print(f'Valid accuracy: {accuracy}')
     print(f'F1: {f1}')
     print(f'Confusion matrix:\n {confusion_matrix}')
-
-
-def load_datasets_and_dataloaders():
-    train_dataset, train_dataloader = util.initialize_dataset_and_dataloader(util.config["train_data_file_path"],
-                                                                             config["train_batch_size"], shuffle=True)
-    validate_dataset, validate_dataloader = util.initialize_dataset_and_dataloader(
-        util.config["validate_data_file_path"], config["validate_batch_size"])
-    test_dataset, test_dataloader = util.initialize_dataset_and_dataloader(util.config["test_data_file_path"],
-                                                                           config["validate_batch_size"])
-
-    return train_dataset, train_dataloader, validate_dataset, validate_dataloader, test_dataset, test_dataloader
 
 
 def to_embedding(batch):
@@ -95,10 +84,6 @@ def to_embedding(batch):
     return embedding_matrix_batch
 
 
-config = {}
-config["train_batch_size"] = 10
-config["validate_batch_size"] = 32
-
 embedding = None
 
 
@@ -106,7 +91,7 @@ def main(args):
     seed = args.seed
     torch.manual_seed(seed)
 
-    train_dataset, train_dataloader, validate_dataset, validate_dataloader, test_dataset, test_dataloader = load_datasets_and_dataloaders()
+    train_dataset, train_dataloader, validate_dataset, validate_dataloader, test_dataset, test_dataloader = baseline.load_datasets_and_dataloaders()
 
     embedding_matrix = util.embedding(train_dataset.text_vocab, util.config["glove_file_path"])
     use_freeze = util.config["glove_file_path"] is not None
@@ -114,12 +99,14 @@ def main(args):
     embedding = torch.nn.Embedding.from_pretrained(embedding_matrix, padding_idx=0, freeze=use_freeze)
 
     # setup net
-    fc1_width = 300
+    input_width = 300
+    rnn1_width = 150
+    rnn2_width = 150
+    fc1_width = 150
     fc2_width = 150
-    fc3_width = 150
     output_width = 1
 
-    model = BaselineModel(fc1_width, fc2_width, fc3_width, output_width)
+    model = RecurrentModel(input_width, rnn1_width, rnn2_width, fc1_width, fc2_width, output_width)
 
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
