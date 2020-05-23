@@ -47,11 +47,6 @@ class NLPDataset(Dataset):
             parts = line.split(", ")
             self.instances.append(Instance(parts[0], parts[1].strip()))
 
-        # create vocabs
-        text_frequencies, label_frequencies = frequencies(self.instances)
-        self.text_vocab = Vocab(text_frequencies)
-        self.label_vocab = Vocab(label_frequencies)
-
         return self
 
     def __len__(self):
@@ -87,8 +82,9 @@ class Vocab:
 
         for token in tokens:
             if token not in self.stoi:
-                print(f'{token} not in vocab')
-            indexes.append(self.stoi[token])
+                indexes.append(self.stoi['<UNK>'])
+            else:
+                indexes.append(self.stoi[token])
 
         return torch.tensor(indexes)
 

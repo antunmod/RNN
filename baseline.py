@@ -3,6 +3,7 @@ from torch import nn
 import util
 import argparse
 import metric
+import random
 
 
 class BaselineModel(nn.Module):
@@ -71,10 +72,19 @@ def evaluate(model, data, criterion):
 def load_datasets_and_dataloaders():
     train_dataset, train_dataloader = util.initialize_dataset_and_dataloader(util.config["train_data_file_path"],
                                                                              config["train_batch_size"], shuffle=True)
+
     validate_dataset, validate_dataloader = util.initialize_dataset_and_dataloader(
         util.config["validate_data_file_path"], config["validate_batch_size"])
     test_dataset, test_dataloader = util.initialize_dataset_and_dataloader(util.config["test_data_file_path"],
                                                                            config["validate_batch_size"])
+
+    # create vocabs and assign them
+    text_frequencies, label_frequencies = util.frequencies(train_dataset.instances)
+    text_vocab = util.Vocab(text_frequencies)
+    label_vocab = util.Vocab(label_frequencies)
+
+    train_dataset.text_vocab = validate_dataset.text_vocab = test_dataset.text_vocab = text_vocab
+    train_dataset.label_vocab = validate_dataset.label_vocab = test_dataset.label_vocab = label_vocab
 
     return train_dataset, train_dataloader, validate_dataset, validate_dataloader, test_dataset, test_dataloader
 
@@ -103,9 +113,6 @@ embedding = None
 
 
 def main(args):
-    seed = args.seed
-    torch.manual_seed(seed)
-
     train_dataset, train_dataloader, validate_dataset, validate_dataloader, test_dataset, test_dataloader = load_datasets_and_dataloaders()
 
     embedding_matrix = util.embedding(train_dataset.text_vocab, util.config["glove_file_path"])
@@ -132,9 +139,22 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-seed", type=int, required=True)
-    parser.add_argument("-epochs", type=int, required=True)
-    parser.add_argument("-clip", type=float, required=True)
+    parser.add_argument("-seed", type=int)
+    parser.add_argument("-epochs", type=int)
+    parser.add_argument("-clip", type=float)
 
     args = parser.parse_args()
+
+    if args.seed is None:
+        args.seed = random.randint(0, 15000)
+    random.seed(args.seed)
+
+    if args.epochs is None:
+        args.epochs = 5
+
+    if args.clip is None:
+        args.clip = random.random()
+
+    torch.manual_seed(args.seed)
+
     main(args)
