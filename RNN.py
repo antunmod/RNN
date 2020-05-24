@@ -9,12 +9,12 @@ import random
 
 class RecurrentModel(nn.Module):
 
-    def __init__(self, cell_type, input_width, hidden_size, fc1_width, fc2_width, output_width, num_layers, bidirectional=False):
+    def __init__(self, cell_type, input_width, width, output_width, num_layers, bidirectional=False, dropout=0):
         super().__init__()
-        self.recurrent1 = create_layer(cell_type, input_width, hidden_size, num_layers, bidirectional)
-        self.recurrent2 = create_layer(cell_type, hidden_size, hidden_size, num_layers, bidirectional)
-        self.fc1 = nn.Linear(fc1_width, fc2_width, bias=True)
-        self.fc2 = nn.Linear(fc2_width, output_width, bias=True)
+        self.recurrent1 = create_layer(cell_type, input_width, width, num_layers, bidirectional, dropout)
+        self.recurrent2 = create_layer(cell_type, width, width, num_layers, bidirectional, dropout)
+        self.fc1 = nn.Linear(width, width, bias=True)
+        self.fc2 = nn.Linear(width, output_width, bias=True)
 
         self.directions = 1
         if bidirectional:
@@ -25,22 +25,23 @@ class RecurrentModel(nn.Module):
         seq_length = x.shape[1]
         x = x.permute(1, 0, 2)
         out1, h1 = self.recurrent1(x)
-        out1 = out1.view(seq_length, batch_size, self.directions, self.recurrent2.hidden_size)[:, :, -1]
-        # h1 = h1.view(self.recurrent1.num_layers, self.directions, batch_size, self.recurrent2.hidden_size)[-1]
+        out1 = out1.view(seq_length, batch_size, self.directions, self.recurrent2.hidden_size)
+        out1 = torch.sum(out1, 2)
         out2, h2 = self.recurrent2(out1, h1)
-        out2 = out2.view(seq_length, batch_size, self.directions, self.recurrent2.hidden_size)[:, :, -1]
-        h = self.fc1(out2[-1])   # consider only the final output
+        out2 = out2.view(seq_length, batch_size, self.directions, self.recurrent2.hidden_size)
+        out2 = torch.sum(out2, 2)[-1]  # consider only the final output
+        h = self.fc1(out2)
         h = torch.relu(h)
         return self.fc2(h)
 
 
-def create_layer(cell_type, input_width, hidden_width, num_layers, bidirectional):
+def create_layer(cell_type, input_width, hidden_width, num_layers, bidirectional, dropout):
     if cell_type == 'RNN':
-        return nn.RNN(input_width, hidden_width, num_layers, bidirectional=bidirectional)
+        return nn.RNN(input_width, hidden_width, num_layers, bidirectional=bidirectional, dropout=dropout)
     if cell_type == 'GRU':
-        return nn.GRU(input_width, hidden_width, num_layers, bidirectional=bidirectional)
+        return nn.GRU(input_width, hidden_width, num_layers, bidirectional=bidirectional, dropout=dropout)
     if cell_type == 'LSTM':
-        return nn.LSTM(input_width, hidden_width, num_layers, bidirectional=bidirectional)
+        return nn.LSTM(input_width, hidden_width, num_layers, bidirectional=bidirectional, dropout=dropout)
 
 
 def train(model, data, optimizer, criterion, embedding, clip):
@@ -107,13 +108,11 @@ def main(args):
 
     # setup net
     input_width = 300
-    hidden_size = 150
-    fc1_width = 150
-    fc2_width = 150
+    width = 150
     output_width = 1
     num_layers = 2
 
-    model = RecurrentModel('LSTM', input_width, hidden_size, fc1_width, fc2_width, output_width, num_layers)
+    model = RecurrentModel('LSTM', input_width, width, output_width, num_layers)
 
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)

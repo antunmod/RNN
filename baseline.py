@@ -9,7 +9,7 @@ import random
 class BaselineModel(nn.Module):
 
     def __init__(self, fc1_width, fc2_width, fc3_width, output_width):
-        super(BaselineModel, self).__init__()
+        super().__init__()
         self.fc1 = nn.Linear(fc1_width, fc2_width, bias=True)
         self.fc2 = nn.Linear(fc2_width, fc3_width, bias=True)
         self.fc3 = nn.Linear(fc3_width, output_width, bias=True)
@@ -24,24 +24,24 @@ class BaselineModel(nn.Module):
         return self.fc3(h)
 
 
-def train(model, data, optimizer, criterion, args):
+def train(model, data, optimizer, criterion, embedding, clip):
     model.train()
     for batch_num, batch in enumerate(data):
         x, y, lengths = batch
         model.zero_grad()
 
-        x_embedding = to_embedding(x)
+        x_embedding = to_embedding(x, embedding)
         logits = model.forward(x_embedding).reshape(len(x))
 
         y_reshaped = torch.tensor(y).reshape(len(x)).type_as(logits)
         loss = criterion(logits, y_reshaped)
 
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
         optimizer.step()
 
 
-def evaluate(model, data, criterion):
+def evaluate(model, data, criterion, embedding):
     model.eval()
     all_logits = torch.FloatTensor()
     all_y = torch.FloatTensor()
@@ -51,7 +51,7 @@ def evaluate(model, data, criterion):
         for batch_num, batch in enumerate(data):
             x, y, lengths = batch
             model.zero_grad()
-            x_embedding = to_embedding(x)
+            x_embedding = to_embedding(x, embedding)
             logits = model.forward(x_embedding).reshape(len(x))
 
             y_reshaped = torch.tensor(y).reshape(len(x)).type_as(logits)
@@ -62,11 +62,7 @@ def evaluate(model, data, criterion):
             all_y = torch.cat((all_y, torch.FloatTensor(y)))
             average_batch_loss += loss.data
 
-    accuracy, f1, confusion_matrix = metric.accuracy_f1_confusion_matrix(all_logits, all_y)
-    print(f'Average validate batch loss: {average_batch_loss / (batch_num + 1)}')
-    print(f'Valid accuracy: {accuracy}')
-    print(f'F1: {f1}')
-    print(f'Confusion matrix:\n {confusion_matrix}')
+    return metric.accuracy_f1_confusion_matrix(all_logits, all_y)
 
 
 def load_datasets_and_dataloaders():
@@ -89,13 +85,12 @@ def load_datasets_and_dataloaders():
     return train_dataset, train_dataloader, validate_dataset, validate_dataloader, test_dataset, test_dataloader
 
 
-def to_embedding(batch):
+def to_embedding(batch, embedding):
     """
     This method switches vocabulary indexes with embedded vectors
     :param batch: batch of numerikalized instances
     :return: batch of
     """
-    global embedding
     batch_size, instance_length, vector_dimension = batch.shape[0], batch.shape[1], embedding.weight.shape[1]
     embedding_matrix_batch = torch.zeros((batch_size, instance_length, vector_dimension))
     for instance_index in range(batch_size):
@@ -109,15 +104,12 @@ config = {}
 config["train_batch_size"] = 10
 config["validate_batch_size"] = 32
 
-embedding = None
-
 
 def main(args):
     train_dataset, train_dataloader, validate_dataset, validate_dataloader, test_dataset, test_dataloader = load_datasets_and_dataloaders()
 
     embedding_matrix = util.embedding(train_dataset.text_vocab, util.config["glove_file_path"])
     use_freeze = util.config["glove_file_path"] is not None
-    global embedding
     embedding = torch.nn.Embedding.from_pretrained(embedding_matrix, padding_idx=0, freeze=use_freeze)
 
     # setup net
@@ -133,8 +125,8 @@ def main(args):
 
     for epoch in range(args.epochs):
         print(f'----------------------------\nEpoch: {epoch}')
-        train(model, train_dataloader, optimizer, criterion, args)
-        evaluate(model, validate_dataloader, criterion)
+        train(model, train_dataloader, optimizer, criterion, embedding, args.clip)
+        evaluate(model, validate_dataloader, criterion, embedding)
 
 
 if __name__ == "__main__":
