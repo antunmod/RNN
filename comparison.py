@@ -65,8 +65,8 @@ def cell_scores_for_variable_hiperparameters(train_dataloader, validate_dataload
     configs = []
     # setup net
     hyperparameters = {}
-    hyperparameters["hidden_size"] = [50, 100, 10, 300, 150]
-    hyperparameters["num_layers"] = [5, 2, 3, 4, 1]
+    hyperparameters["hidden_size"] = [50, 100, 10, 30, 150]
+    hyperparameters["num_layers"] = [2, 3, 4, 1]
     hyperparameters["dropout"] = [0.1, 0.3, 0.7, 0.5, 0.9]
     hyperparameters["bidirectional"] = [True, False]
 
@@ -75,29 +75,31 @@ def cell_scores_for_variable_hiperparameters(train_dataloader, validate_dataload
     initial_config = {}
     initial_config["seed"] = args.seed
     initial_config["clip"] = args.clip
-    initial_config["epochs"] = args.epochs
-    initial_config["input_width"] = 300
-    initial_config["output_width"] = 1
+
+    net_config = {}
+    net_config["input_width"] = 300
+    net_config["output_width"] = 1
 
     recurrent_models = ['RNN', 'GRU', 'LSTM']
+    print(f'Random testing with {len(recurrent_models)} models and {len(values)} values')
     for recurrent_model in recurrent_models:
-        for value in values:
+        print(f'------------------------------------\n{recurrent_model}')
+        for iteration, value in enumerate(values):
+            print(f'{iteration}: {value}')
             config = {}
             config["model"] = recurrent_model
             config.update(initial_config)
-            config.update(values)
+            config.update(value)
             start = time.time()
-            print(f'{recurrent_model}: {value}')
 
-            model = RNN.RecurrentModel(recurrent_model, config["input_width"], value["hidden_size"],
-                                       config["output_width"],
+            model = RNN.RecurrentModel(recurrent_model, net_config["input_width"], value["hidden_size"], net_config["output_width"],
                                        value["num_layers"], value["bidirectional"], value["dropout"])
 
             criterion = nn.BCEWithLogitsLoss()
             optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
             for epoch in range(args.epochs):
-                print(f'----------------------------\nEpoch: {epoch}')
+                print(f'Epoch: {epoch}')
                 RNN.train(model, train_dataloader, optimizer, criterion, embedding, args.clip)
                 RNN.evaluate(model, validate_dataloader, criterion, embedding)
             accuracy, f1, confusion_matrix = RNN.evaluate(model, test_dataloader, criterion, embedding)
@@ -304,7 +306,6 @@ def best_cell_and_baseline_hyperparameters(train_dataloader, validate_dataloader
 
     criterion = nn.BCEWithLogitsLoss()
 
-    tested = False
     for model_type in models:
         for (key, values) in hyperparameters.items():
             # Skip this hyperparameter testing if the model does not support it
@@ -335,10 +336,6 @@ def best_cell_and_baseline_hyperparameters(train_dataloader, validate_dataloader
 
                 print(config)
 
-                if config["optimizer"] == torch.optim.RMSprop and not tested:
-                    print_to_file("5a_final_before.xls", "RNN baseline hyperparameters", configs)
-                    tested = True
-
                 optimizer = config["optimizer"](model.parameters(), lr=config["lr"])
 
                 for epoch in range(args.epochs):
@@ -364,6 +361,7 @@ def best_cell_and_baseline_hyperparameters(train_dataloader, validate_dataloader
 def method_to_string(method):
     name = str(method).split(".")[-1]
     return name[0:len(name)-2]
+
 
 def print_to_file(file_name, description, configs):
     file_path = folder_path + file_name
@@ -425,8 +423,8 @@ def main(args):
     # cell_scores_for_initial_hiperparameters(train_dataloader, validate_dataloader, test_dataloader, embedding, args)
     # cell_scores_for_variable_hiperparameters(train_dataloader, validate_dataloader, test_dataloader, embedding, args)
     # best_cell_scores_for_different_seed(train_dataloader, validate_dataloader, test_dataloader, embedding)
-    best_cell_and_baseline_with_and_without_pretrained(train_dataset, train_dataloader, validate_dataloader,
-                                                       test_dataloader, args)
+    # best_cell_and_baseline_with_and_without_pretrained(train_dataset, train_dataloader, validate_dataloader,
+    #                                                    test_dataloader, args)
     # best_cell_and_baseline_hyperparameters(train_dataloader, validate_dataloader, test_dataloader,
     #                                        embedding)
 
