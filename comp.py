@@ -114,6 +114,92 @@ def cell_scores_for_variable_hiperparameters(train_dataloader, validate_dataload
     print_to_file("2c_variable_RNN_bidirectional_sum.xls", "Random hyperparameters", configs)
 
 
+def best_cell_and_baseline_with_and_without_pretrained(train_dataset, train_dataloader, validate_dataloader,
+                                                       test_dataloader, clip):
+    configs = []
+
+    RNN_config = {}
+    RNN_config["model"] = "LSTM"
+    RNN_config["hidden_size"] = 30
+    RNN_config["num_layers"] = 3
+    RNN_config["dropout"] = 0.9
+    RNN_config["bidirectional"] = True
+    RNN_config["fc1_width"] = "//"
+    RNN_config["fc2_width"] = "//"
+
+    baseline_config = {}
+    baseline_config["model"] = "Baseline"
+    baseline_config["hidden_size"] = "//"
+    baseline_config["num_layers"] = "//"
+    baseline_config["dropout"] = "//"
+    baseline_config["bidirectional"] = "//"
+    baseline_config["fc1_width"] = 150
+    baseline_config["fc2_width"] = 150
+
+    initial_config = {}
+    initial_config["clip"] = args.clip
+    initial_config["epochs"] = args.epochs
+    initial_config["input_width"] = 300
+    initial_config["output_width"] = 1
+
+    lstm = RNN.RecurrentModel(RNN_config["model"], initial_config["input_width"], RNN_config["hidden_size"],
+                              initial_config["output_width"], RNN_config["num_layers"],
+                              RNN_config["bidirectional"], RNN_config["dropout"])
+
+    base = baseline.BaselineModel(initial_config["input_width"], baseline_config["fc1_width"], baseline_config["fc2_width"],
+                         initial_config["output_width"])
+    models = [base, lstm]
+
+    criterion = nn.BCEWithLogitsLoss()
+    use_embeddings = [False, True]
+    for use_embedding in use_embeddings:
+        if use_embedding:
+            file_path = util.config["glove_file_path"]
+        else:
+            file_path = None
+        embedding_matrix = util.embedding(train_dataset.text_vocab, file_path)
+        use_freeze = util.config["glove_file_path"] is not None
+        embedding = torch.nn.Embedding.from_pretrained(embedding_matrix, padding_idx=0, freeze=use_freeze)
+
+        for model in models:
+            start = time.time()
+            config = {}
+
+            if type(model) == RNN.RecurrentModel:
+                config.update(RNN_config)
+                train = RNN.train
+                evaluate = RNN.evaluate
+            else:
+                config.update(baseline_config)
+                train = baseline.train
+                evaluate = baseline.evaluate
+
+            config.update(initial_config)
+            config["pretrained"] = use_embedding
+
+            print(config)
+
+            optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+
+            for epoch in range(args.epochs):
+                print(f'----------------------------\nEpoch: {epoch}')
+                train(model, train_dataloader, optimizer, criterion, embedding, clip.clip)
+                evaluate(model, validate_dataloader, criterion, embedding)
+            accuracy, f1, confusion_matrix = evaluate(model, test_dataloader, criterion, embedding)
+            config["accuracy"] = accuracy.item()
+            config["f1"] = f1.item()
+            config["TP"] = confusion_matrix[0, 0].item()
+            config["FP"] = confusion_matrix[0, 1].item()
+            config["FN"] = confusion_matrix[1, 0].item()
+            config["TN"] = confusion_matrix[1, 1].item()
+
+            end = time.time()
+            config["time"] = end - start
+            configs.append(config)
+
+    print_to_file("4a_pretrained.xls", "Best RNN and baseline", configs)
+
+
 def print_to_file(file_name, description, configs):
     file_path = folder_path + file_name
     if os.path.exists(file_path):
@@ -173,8 +259,9 @@ def main(args):
     embedding = torch.nn.Embedding.from_pretrained(embedding_matrix, padding_idx=0, freeze=use_freeze)
 
     # cell_scores_for_initial_hiperparameters(train_dataloader, validate_dataloader, test_dataloader, embedding, args)
-    cell_scores_for_variable_hiperparameters(train_dataloader, validate_dataloader, test_dataloader, embedding, args)
-
+    # cell_scores_for_variable_hiperparameters(train_dataloader, validate_dataloader, test_dataloader, embedding, args)
+    best_cell_and_baseline_with_and_without_pretrained(train_dataset, train_dataloader, validate_dataloader,
+                                                       test_dataloader, args)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

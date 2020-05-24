@@ -251,8 +251,7 @@ def best_cell_and_baseline_with_and_without_pretrained(train_dataset, train_data
     print_to_file("4a_pretrained.xls", "Best RNN and baseline", configs)
 
 
-def best_cell_and_baseline_hyperparameters(train_dataset, train_dataloader, validate_dataloader, test_dataloader,
-                                           embedding):
+def best_cell_and_baseline_hyperparameters(train_dataloader, validate_dataloader, test_dataloader, embedding):
     configs = []
 
     RNN_config = {}
@@ -343,7 +342,7 @@ def best_cell_and_baseline_hyperparameters(train_dataset, train_dataloader, vali
                 optimizer = config["optimizer"](model.parameters(), lr=config["lr"])
 
                 for epoch in range(args.epochs):
-                    print(f'----------------------------\nEpoch: {epoch}')
+                    print(f'\nEpoch: {epoch}')
                     train(model, train_dataloader, optimizer, criterion, embedding, args.clip)
                     evaluate(model, validate_dataloader, criterion, embedding)
                 accuracy, f1, confusion_matrix = evaluate(model, test_dataloader, criterion, embedding)
@@ -426,10 +425,10 @@ def main(args):
     # cell_scores_for_initial_hiperparameters(train_dataloader, validate_dataloader, test_dataloader, embedding, args)
     # cell_scores_for_variable_hiperparameters(train_dataloader, validate_dataloader, test_dataloader, embedding, args)
     # best_cell_scores_for_different_seed(train_dataloader, validate_dataloader, test_dataloader, embedding)
-    # best_cell_and_baseline_with_and_without_pretrained(train_dataset, train_dataloader, validate_dataloader,
-    #                                                    test_dataloader, args)
-    best_cell_and_baseline_hyperparameters(train_dataset, train_dataloader, validate_dataloader, test_dataloader,
-                                           embedding)
+    best_cell_and_baseline_with_and_without_pretrained(train_dataset, train_dataloader, validate_dataloader,
+                                                       test_dataloader, args)
+    # best_cell_and_baseline_hyperparameters(train_dataloader, validate_dataloader, test_dataloader,
+    #                                        embedding)
 
 
 if __name__ == "__main__":
